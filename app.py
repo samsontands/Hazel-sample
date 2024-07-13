@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import requests
 import json
 
@@ -119,8 +118,13 @@ def get_groq_response(prompt, system_prompt):
         ],
         "max_tokens": 150
     }
-    response = requests.post(url, headers=headers, data=json.dumps(data))
-    return response.json()['choices'][0]['message']['content']
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        return response.json()['choices'][0]['message']['content']
+    except requests.exceptions.RequestException as e:
+        st.error(f"An error occurred while calling the Groq API: {str(e)}")
+        return None
 
 def ask_me_anything():
     st.title("Ask Me Anything")
@@ -130,11 +134,31 @@ def ask_me_anything():
     You are an AI assistant representing Hazel Tan. Answer questions about Hazel's background, skills, and experience based on her CV. Keep responses concise and professional. If you're unsure about any information, state that it's not specified in the CV.
     """
     
+    # Initialize session state for user questions and AI responses
+    if 'questions' not in st.session_state:
+        st.session_state.questions = []
+    if 'responses' not in st.session_state:
+        st.session_state.responses = []
+
+    # Text input for user question
     user_question = st.text_input("What would you like to know about Hazel?")
-    if user_question:
-        with st.spinner('Getting a quick answer...'):
-            response = get_groq_response(user_question, system_prompt)
-        st.write(response)
+
+    # Button to submit the question
+    if st.button("Ask"):
+        if user_question:
+            with st.spinner('Getting a quick answer...'):
+                response = get_groq_response(user_question, system_prompt)
+            if response:
+                # Add the new question and response to the session state
+                st.session_state.questions.append(user_question)
+                st.session_state.responses.append(response)
+
+    # Display all questions and answers
+    for q, r in zip(st.session_state.questions, st.session_state.responses):
+        st.subheader(f"Q: {q}")
+        st.write(f"A: {r}")
+        st.divider()
+
     st.caption("Note: Responses are kept brief. For more detailed information, please refer to the CV page.")
 
 def main():
